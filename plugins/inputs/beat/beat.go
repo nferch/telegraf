@@ -1,4 +1,4 @@
-package filebeat
+package beat
 
 import (
 	"encoding/json"
@@ -15,11 +15,11 @@ import (
 )
 
 const sampleConfig = `
-  ## An URL from which to read Filebeat-formatted JSON
+  ## An URL from which to read Beat-formatted JSON
   ## Default is "http://127.0.0.1:5066".
   url = "http://127.0.0.1:5066"
 
-  ## Enable collection of the generic Beat stats
+  ## Enable collection of the Beat stats
   collect_beat_stats = true
 
   ## Enable the collection if Libbeat stats
@@ -55,12 +55,12 @@ const sampleConfig = `
   # insecure_skip_verify = false
 `
 
-const description = "Read metrics exposed by Filebeat"
+const description = "Read metrics exposed by Beat"
 
 const suffixInfo = "/"
 const suffixStats = "/stats"
 
-type FileBeatInfo struct {
+type BeatInfo struct {
 	Beat     string `json:"beat"`
 	Hostname string `json:"hostname"`
 	Name     string `json:"name"`
@@ -68,14 +68,14 @@ type FileBeatInfo struct {
 	Version  string `json:"version"`
 }
 
-type FileBeatStats struct {
+type BeatStats struct {
 	Beat     map[string]interface{} `json:"beat"`
-	Filebeat interface{}            `json:"filebeat"`
+	FileBeat interface{}            `json:"filebeat"`
 	Libbeat  interface{}            `json:"libbeat"`
 	System   interface{}            `json:"system"`
 }
 
-type Filebeat struct {
+type Beat struct {
 	URL string `toml:"url"`
 
 	CollectBeatStats     bool `toml:"collect_beat_stats"`
@@ -94,8 +94,8 @@ type Filebeat struct {
 	client *http.Client
 }
 
-func NewFilebeat() *Filebeat {
-	return &Filebeat{
+func NewBeat() *Beat {
+	return &Beat{
 		URL:                  "http://127.0.0.1:5066",
 		CollectBeatStats:     true,
 		CollectLibbeatStats:  true,
@@ -108,17 +108,17 @@ func NewFilebeat() *Filebeat {
 	}
 }
 
-func (filebeat *Filebeat) Description() string {
+func (beat *Beat) Description() string {
 	return description
 }
 
-func (filebeat *Filebeat) SampleConfig() string {
+func (beat *Beat) SampleConfig() string {
 	return sampleConfig
 }
 
 // createHttpClient create a clients to access API
-func (filebeat *Filebeat) createHttpClient() (*http.Client, error) {
-	tlsConfig, err := filebeat.ClientConfig.TLSConfig()
+func (beat *Beat) createHttpClient() (*http.Client, error) {
+	tlsConfig, err := beat.ClientConfig.TLSConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -127,18 +127,18 @@ func (filebeat *Filebeat) createHttpClient() (*http.Client, error) {
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
-		Timeout: filebeat.Timeout.Duration,
+		Timeout: beat.Timeout.Duration,
 	}
 
 	return client, nil
 }
 
 // gatherJsonData query the data source and parse the response JSON
-func (filebeat *Filebeat) gatherJsonData(url string, value interface{}) error {
+func (beat *Beat) gatherJsonData(url string, value interface{}) error {
 
 	var method string
-	if filebeat.Method != "" {
-		method = filebeat.Method
+	if beat.Method != "" {
+		method = beat.Method
 	} else {
 		method = "GET"
 	}
@@ -148,17 +148,17 @@ func (filebeat *Filebeat) gatherJsonData(url string, value interface{}) error {
 		return err
 	}
 
-	if (filebeat.Username != "") || (filebeat.Password != "") {
-		request.SetBasicAuth(filebeat.Username, filebeat.Password)
+	if (beat.Username != "") || (beat.Password != "") {
+		request.SetBasicAuth(beat.Username, beat.Password)
 	}
-	for header, value := range filebeat.Headers {
+	for header, value := range beat.Headers {
 		request.Header.Add(header, value)
 	}
-	if filebeat.HostHeader != "" {
-		request.Host = filebeat.HostHeader
+	if beat.HostHeader != "" {
+		request.Host = beat.HostHeader
 	}
 
-	response, err := filebeat.client.Do(request)
+	response, err := beat.client.Do(request)
 	if err != nil {
 		return err
 	}
@@ -173,96 +173,96 @@ func (filebeat *Filebeat) gatherJsonData(url string, value interface{}) error {
 	return nil
 }
 
-func (filebeat *Filebeat) gatherInfoTags(url string) (map[string]string, error) {
-	fileBeatInfo := &FileBeatInfo{}
+func (beat *Beat) gatherInfoTags(url string) (map[string]string, error) {
+	beatInfo := &BeatInfo{}
 
-	err := filebeat.gatherJsonData(url, fileBeatInfo)
+	err := beat.gatherJsonData(url, beatInfo)
 	if err != nil {
 		return nil, err
 	}
 
 	tags := map[string]string{
-		"beat_id":      fileBeatInfo.UUID,
-		"beat_name":    fileBeatInfo.Name,
-		"beat_host":    fileBeatInfo.Hostname,
-		"beat_version": fileBeatInfo.Version,
+		"beat_id":      beatInfo.UUID,
+		"beat_name":    beatInfo.Name,
+		"beat_host":    beatInfo.Hostname,
+		"beat_version": beatInfo.Version,
 	}
 
 	return tags, nil
 }
 
-func (filebeat *Filebeat) gatherStats(accumulator telegraf.Accumulator) error {
-	fileBeatStats := &FileBeatStats{}
+func (beat *Beat) gatherStats(accumulator telegraf.Accumulator) error {
+	beatStats := &BeatStats{}
 
-	infoUrl, err := url.Parse(filebeat.URL + suffixInfo)
+	infoUrl, err := url.Parse(beat.URL + suffixInfo)
 	if err != nil {
 		return err
 	}
-	statsUrl, err := url.Parse(filebeat.URL + suffixStats)
-	if err != nil {
-		return err
-	}
-
-	tags, err := filebeat.gatherInfoTags(infoUrl.String())
+	statsUrl, err := url.Parse(beat.URL + suffixStats)
 	if err != nil {
 		return err
 	}
 
-	err = filebeat.gatherJsonData(statsUrl.String(), fileBeatStats)
+	tags, err := beat.gatherInfoTags(infoUrl.String())
 	if err != nil {
 		return err
 	}
 
-	if filebeat.CollectBeatStats {
+	err = beat.gatherJsonData(statsUrl.String(), beatStats)
+	if err != nil {
+		return err
+	}
+
+	if beat.CollectBeatStats {
 		flattenerBeat := jsonparser.JSONFlattener{}
-		err := flattenerBeat.FlattenJSON("", fileBeatStats.Beat)
+		err := flattenerBeat.FlattenJSON("", beatStats.Beat)
 		if err != nil {
 			return err
 		}
-		accumulator.AddFields("filebeat_beat", flattenerBeat.Fields, tags)
+		accumulator.AddFields("beat", flattenerBeat.Fields, tags)
 	}
 
-	if filebeat.CollectFilebeatStats {
-		flattenerFilebeat := jsonparser.JSONFlattener{}
-		err := flattenerFilebeat.FlattenJSON("", fileBeatStats.Filebeat)
+	if beat.CollectFilebeatStats {
+		flattenerBeat := jsonparser.JSONFlattener{}
+		err := flattenerBeat.FlattenJSON("", beatStats.FileBeat)
 		if err != nil {
 			return err
 		}
-		accumulator.AddFields("filebeat", flattenerFilebeat.Fields, tags)
+		accumulator.AddFields("beat_filebeat", flattenerBeat.Fields, tags)
 	}
 
-	if filebeat.CollectLibbeatStats {
+	if beat.CollectLibbeatStats {
 		flattenerLibbeat := jsonparser.JSONFlattener{}
-		err := flattenerLibbeat.FlattenJSON("", fileBeatStats.Libbeat)
+		err := flattenerLibbeat.FlattenJSON("", beatStats.Libbeat)
 		if err != nil {
 			return err
 		}
-		accumulator.AddFields("filebeat_libbeat", flattenerLibbeat.Fields, tags)
+		accumulator.AddFields("beat_libbeat", flattenerLibbeat.Fields, tags)
 	}
 
-	if filebeat.CollectSystemStats {
+	if beat.CollectSystemStats {
 		flattenerSystem := jsonparser.JSONFlattener{}
-		err := flattenerSystem.FlattenJSON("", fileBeatStats.System)
+		err := flattenerSystem.FlattenJSON("", beatStats.System)
 		if err != nil {
 			return err
 		}
-		accumulator.AddFields("filebeat_system", flattenerSystem.Fields, tags)
+		accumulator.AddFields("beat_system", flattenerSystem.Fields, tags)
 	}
 
 	return nil
 }
 
-func (filebeat *Filebeat) Gather(accumulator telegraf.Accumulator) error {
-	if filebeat.client == nil {
-		client, err := filebeat.createHttpClient()
+func (beat *Beat) Gather(accumulator telegraf.Accumulator) error {
+	if beat.client == nil {
+		client, err := beat.createHttpClient()
 
 		if err != nil {
 			return err
 		}
-		filebeat.client = client
+		beat.client = client
 	}
 
-	err := filebeat.gatherStats(accumulator)
+	err := beat.gatherStats(accumulator)
 	if err != nil {
 		return err
 	}
@@ -271,7 +271,7 @@ func (filebeat *Filebeat) Gather(accumulator telegraf.Accumulator) error {
 }
 
 func init() {
-	inputs.Add("filebeat", func() telegraf.Input {
-		return NewFilebeat()
+	inputs.Add("beat", func() telegraf.Input {
+		return NewBeat()
 	})
 }

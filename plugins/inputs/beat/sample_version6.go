@@ -1,6 +1,6 @@
-package filebeat
+package beat
 
-const filebeat6Info = `
+const beat6Info = `
 {
   "beat": "filebeat",
   "hostname": "node-6",
@@ -10,7 +10,7 @@ const filebeat6Info = `
 }
 `
 
-const filebeat6Stats = `
+const beat6Stats = `
 {
   "beat": {
     "cpu": {

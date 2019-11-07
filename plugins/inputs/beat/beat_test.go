@@ -1,4 +1,4 @@
-package filebeat
+package beat
 
 import (
 	"fmt"
@@ -12,53 +12,57 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var filebeatTest = NewFilebeat()
+var beatTest = NewBeat()
 
 var (
-	filebeat6StatsAccumulator testutil.Accumulator
+	beat6StatsAccumulator testutil.Accumulator
 )
 
-func Test_Filebeat6Stats(test *testing.T) {
-	//filebeat6StatsAccumulator.SetDebug(true)
+func Test_BeatStats(test *testing.T) {
+	//beat6StatsAccumulator.SetDebug(true)
 	fakeServer := httptest.NewUnstartedServer(
 		http.HandlerFunc(
 			func(writer http.ResponseWriter, request *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
 				if request.URL.String() == suffixInfo {
-					fmt.Fprintf(writer, "%s", string(filebeat6Info))
+					fmt.Fprintf(writer, "%s", string(beat6Info))
 				} else if request.URL.String() == suffixStats {
-					fmt.Fprintf(writer, "%s", string(filebeat6Stats))
+					fmt.Fprintf(writer, "%s", string(beat6Stats))
 				} else {
 					test.Logf("Unkown URL: " + request.URL.String())
 				}
 			},
 		),
 	)
-	requestURL, err := url.Parse(filebeatTest.URL)
+	requestURL, err := url.Parse(beatTest.URL)
 	if err != nil {
-		test.Logf("Can't connect to: %s", filebeatTest.URL)
+		test.Logf("Can't connect to: %s", beatTest.URL)
 	}
-	fakeServer.Listener, _ = net.Listen("tcp", fmt.Sprintf("%s:%s", requestURL.Hostname(), requestURL.Port()))
+	fakeServer.Listener, err = net.Listen("tcp", fmt.Sprintf("%s:%s", requestURL.Hostname(), requestURL.Port()))
+	if err != nil {
+		test.Logf("Can't listen for %s: %v", requestURL, err)
+	}
+
 	fakeServer.Start()
 	defer fakeServer.Close()
 
-	if filebeatTest.client == nil {
-		client, err := filebeatTest.createHttpClient()
+	if beatTest.client == nil {
+		client, err := beatTest.createHttpClient()
 
 		if err != nil {
 			test.Logf("Can't createHttpClient")
 		}
-		filebeatTest.client = client
+		beatTest.client = client
 	}
 
-	err = filebeatTest.gatherStats(&filebeat6StatsAccumulator)
+	err = beatTest.gatherStats(&beat6StatsAccumulator)
 	if err != nil {
 		test.Logf("Can't gather stats")
 	}
 
-	filebeat6StatsAccumulator.AssertContainsTaggedFields(
+	beat6StatsAccumulator.AssertContainsTaggedFields(
 		test,
-		"filebeat_beat",
+		"beat",
 		map[string]interface{}{
 			"cpu_system_ticks":      float64(626970),
 			"cpu_system_time_ms":    float64(626972),
@@ -81,9 +85,9 @@ func Test_Filebeat6Stats(test *testing.T) {
 		},
 	)
 
-	filebeat6StatsAccumulator.AssertContainsTaggedFields(
+	beat6StatsAccumulator.AssertContainsTaggedFields(
 		test,
-		"filebeat",
+		"beat_filebeat",
 		map[string]interface{}{
 			"events_active":             float64(0),
 			"events_added":              float64(182990),
@@ -104,9 +108,9 @@ func Test_Filebeat6Stats(test *testing.T) {
 		},
 	)
 
-	filebeat6StatsAccumulator.AssertContainsTaggedFields(
+	beat6StatsAccumulator.AssertContainsTaggedFields(
 		test,
-		"filebeat_libbeat",
+		"beat_libbeat",
 		map[string]interface{}{
 			"config_module_running":     float64(0),
 			"config_module_starts":      float64(0),
@@ -143,9 +147,9 @@ func Test_Filebeat6Stats(test *testing.T) {
 		},
 	)
 
-	filebeat6StatsAccumulator.AssertContainsTaggedFields(
+	beat6StatsAccumulator.AssertContainsTaggedFields(
 		test,
-		"filebeat_system",
+		"beat_system",
 		map[string]interface{}{
 			"cpu_cores":    float64(32),
 			"load_1":       float64(32.49),
@@ -165,51 +169,51 @@ func Test_Filebeat6Stats(test *testing.T) {
 
 }
 
-func Test_Filebeat6Request(test *testing.T) {
-	//filebeat6StatsAccumulator.SetDebug(true)
+func Test_BeatRequest(test *testing.T) {
+	//beat6StatsAccumulator.SetDebug(true)
 	fakeServer := httptest.NewUnstartedServer(
 		http.HandlerFunc(
 			func(writer http.ResponseWriter, request *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
 				if request.URL.String() == suffixInfo {
-					fmt.Fprintf(writer, "%s", string(filebeat6Info))
+					fmt.Fprintf(writer, "%s", string(beat6Info))
 				} else if request.URL.String() == suffixStats {
-					fmt.Fprintf(writer, "%s", string(filebeat6Stats))
+					fmt.Fprintf(writer, "%s", string(beat6Stats))
 				} else {
 					test.Logf("Unkown URL: " + request.URL.String())
 				}
 
-				assert.Equal(test, request.Host, "filebeat.test.local")
+				assert.Equal(test, request.Host, "beat.test.local")
 				assert.Equal(test, request.Method, "POST")
 				assert.Equal(test, request.Header.Get("Authorization"), "Basic YWRtaW46UFdE")
 				assert.Equal(test, request.Header.Get("X-Test"), "test-value")
 			},
 		),
 	)
-	requestURL, err := url.Parse(filebeatTest.URL)
+	requestURL, err := url.Parse(beatTest.URL)
 	if err != nil {
-		test.Logf("Can't connect to: %s", filebeatTest.URL)
+		test.Logf("Can't connect to: %s", beatTest.URL)
 	}
 	fakeServer.Listener, _ = net.Listen("tcp", fmt.Sprintf("%s:%s", requestURL.Hostname(), requestURL.Port()))
 	fakeServer.Start()
 	defer fakeServer.Close()
 
-	if filebeatTest.client == nil {
-		client, err := filebeatTest.createHttpClient()
+	if beatTest.client == nil {
+		client, err := beatTest.createHttpClient()
 
 		if err != nil {
 			test.Logf("Can't createHttpClient")
 		}
-		filebeatTest.client = client
+		beatTest.client = client
 	}
 
-	filebeatTest.Headers["X-Test"] = "test-value"
-	filebeatTest.HostHeader = "filebeat.test.local"
-	filebeatTest.Method = "POST"
-	filebeatTest.Username = "admin"
-	filebeatTest.Password = "PWD"
+	beatTest.Headers["X-Test"] = "test-value"
+	beatTest.HostHeader = "filebeat.test.local"
+	beatTest.Method = "POST"
+	beatTest.Username = "admin"
+	beatTest.Password = "PWD"
 
-	err = filebeatTest.gatherStats(&filebeat6StatsAccumulator)
+	err = beatTest.gatherStats(&beat6StatsAccumulator)
 	if err != nil {
 		test.Logf("Can't gather stats")
 	}
